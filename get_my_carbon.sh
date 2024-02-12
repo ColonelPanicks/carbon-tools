@@ -137,8 +137,8 @@ esac
 ## Create JSON
 #
 # Usage: 
-# - Consider 1 hour in eval
-# - Lifespan of 5 years
+# - 1 hour of usage
+# - 1 hour of lifetime (otherwise lifetime worth of manufacture is included
 #
 BASEREQUEST="
 {
@@ -191,6 +191,10 @@ FULLLOADREQUEST="$BASEREQUEST
 }
 "
 
+#
+# Get GWP from Specs
+#
+
 NOLOAD=$(curl -s -X 'POST' \
   'https://api.boavizta.org/v1/server/?verbose=true&criteria=gwp' \
   -H 'accept: application/json' \
@@ -210,6 +214,68 @@ FULLLOAD=$(curl -s -X 'POST' \
   -d "$FULLLOADREQUEST" |jq '.impacts.gwp.use.value')
 
 #
+# Get GWP from Instance Type
+#
+# This will likely be lower than the "from specs" answers because:
+# - Specs does not do any resource "sharing" for virtualisation
+#   which means it is assumed the system has a dedicated PSU
+# - Specs also includes HDDs/SSDs whereas cloud instance types do not
+#   although it seems that disks only have manufacture cost
+
+if [ ! -z $USE_INSTANCE_TYPE ] ; then
+
+NOLOADINSTANCEREQUEST="{
+\"provider\": \"aws\", 
+\"instance_type\": \"$INSTANCE_TYPE\",
+\"usage\" : { 
+  \"usage_location\": \"GBR\", 
+  \"hours_use_time\": 1, 
+  \"hours_life_time\": 1, 
+  \"time_workload\": [{ 
+    \"time_percentage\": 100, 
+    \"load_percentage\": 0
+    }]
+  }
+}
+"
+HALFLOADINSTANCEREQUEST="{
+\"provider\": \"aws\", 
+\"instance_type\": \"$INSTANCE_TYPE\",
+\"usage\" : { 
+  \"usage_location\": \"GBR\", 
+  \"hours_use_time\": 1, 
+  \"hours_life_time\": 1, 
+  \"time_workload\": [{ 
+    \"time_percentage\": 100, 
+    \"load_percentage\": 50
+    }]
+  }
+}
+"
+
+FULLLOADINSTANCEREQUEST="{
+\"provider\": \"aws\", 
+\"instance_type\": \"$INSTANCE_TYPE\",
+\"usage\" : { 
+  \"usage_location\": \"GBR\", 
+  \"hours_use_time\": 1, 
+  \"hours_life_time\": 1, 
+  \"time_workload\": [{ 
+    \"time_percentage\": 100, 
+    \"load_percentage\": 100
+    }]
+  }
+}
+"
+
+NOLOADINSTANCE="$(curl -s -X 'POST' -H 'accept: application/json' 'https://api.boavizta.org/v1/cloud/instance?verbose=true&criteria=gwp' -H 'Content-Type: application/json' -d "$NOLOADINSTANCEREQUEST" |jq '.impacts.gwp.use.value')"
+HALFLOADINSTANCE="$(curl -s -X 'POST' -H 'accept: application/json' 'https://api.boavizta.org/v1/cloud/instance?verbose=true&criteria=gwp' -H 'Content-Type: application/json' -d "$HALFLOADINSTANCEREQUEST" |jq '.impacts.gwp.use.value')"
+FULLLOADINSTANCE="$(curl -s -X 'POST' -H 'accept: application/json' 'https://api.boavizta.org/v1/cloud/instance?verbose=true&criteria=gwp' -H 'Content-Type: application/json' -d "$FULLLOADINSTANCEREQUEST" |jq '.impacts.gwp.use.value')"
+
+fi
+
+
+#
 # Query Overview
 #
 
@@ -225,9 +291,20 @@ Disks: $(echo "$DISKSINFO" |sed 's/, $//g')
 Platform: $PLATFORM
 Location: $LOCATION
 
-## Estimated Carbon Consumption
+## Estimated Carbon Consumption (From Specs)
 
 No Load: ${NOLOAD}kgCO2eq/hr
 Half Load: ${HALFLOAD}kgCO2eq/hr
 Full Load: ${FULLLOAD}kgCO2eq/hr
 EOF
+
+if [ ! -z $USE_INSTANCE_TYPE ] ; then
+    cat << EOF
+
+## Estimated Carbon Consumption (From Instance Type) 
+
+No Load: ${NOLOADINSTANCE}kgCO2eq/hr
+Half Load: ${HALFLOADINSTANCE}kgCO2eq/hr
+Full Load: ${FULLLOADINSTANCE}kgCO2eq/hr
+EOF
+fi
