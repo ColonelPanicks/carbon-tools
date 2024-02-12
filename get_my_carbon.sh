@@ -3,10 +3,19 @@
 # Estimate the average carbon impact of this system based off of it's specifications
 #
 
+# Vars
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+LOG_DIR="$DIR/logs"
+
 # Exit if no jq
 if ! which jq >/dev/null 2>&1 ; then
     echo "Can't find command 'jq', this is required for program to function"
     exit 1
+fi
+
+# Prepare log stuff
+if [ ! -d $LOG_DIR ] ; then
+    mkdir $LOG_DIR
 fi
 
 #
@@ -272,14 +281,88 @@ NOLOADINSTANCE="$(curl -s -X 'POST' -H 'accept: application/json' 'https://api.b
 HALFLOADINSTANCE="$(curl -s -X 'POST' -H 'accept: application/json' 'https://api.boavizta.org/v1/cloud/instance?verbose=true&criteria=gwp' -H 'Content-Type: application/json' -d "$HALFLOADINSTANCEREQUEST" |jq '.impacts.gwp.use.value')"
 FULLLOADINSTANCE="$(curl -s -X 'POST' -H 'accept: application/json' 'https://api.boavizta.org/v1/cloud/instance?verbose=true&criteria=gwp' -H 'Content-Type: application/json' -d "$FULLLOADINSTANCEREQUEST" |jq '.impacts.gwp.use.value')"
 
+NOLOADAVG=$(echo "print(round(($NOLOAD+$NOLOADINSTANCE)/2,4))" |python)
+HALFLOADAVG=$(echo "print(round(($HALFLOAD+$HALFLOADINSTANCE)/2,4))" |python)
+FULLLOADAVG=$(echo "print(round(($FULLLOAD+$FULLLOADINSTANCE)/2,4))" |python)
+
 fi
 
+#
+# Output
+#
+
+# Debug information
+
+cat <<EOF > $LOG_DIR/debug.log
+Date of Report: $(date)
 
 #
-# Query Overview
+# System Info
 #
 
-cat << EOF
+## Estimated System Specs
+
+CPU: $NUMCPUS x $CPUMODEL ($NUMCORESPERCPU core(s) per CPU)
+RAM: $NUMDIMMS x ${GBPERDIMM}GB
+Disks: $(echo "$DISKSINFO" |sed 's/, $//g')
+
+## Platform & Power Information
+
+Platform: $PLATFORM
+Location: $LOCATION
+
+#
+# Hardware Spec Queries
+#
+
+# No Load
+$NOLOADREQUEST
+
+# Half Load
+$HALFLOADREQUEST
+
+# Full Load
+$FULLLOADREQUEST
+
+EOF
+
+if [ ! -z $USE_INSTANCE_TYPE ] ; then
+    cat << EOF >> $LOG_DIR/debug.log
+#
+# Instance Type Queries
+#
+
+# No Load
+$NOLOADINSTANCEREQUEST
+
+# Half Load
+$HALFLOADINSTANCEREQUEST
+
+# Full Load
+$FULLLOADINSTANCEREQUEST
+EOF
+fi
+
+# Data
+cat << EOF > $LOG_DIR/data.sh
+NOLOAD=$NOLOAD
+HALFLOAD=$HALFLOAD
+FULLLOAD=$FULLLOAD
+EOF
+
+if [ ! -z $USE_INSTANCE_TYPE ] ; then
+    cat << EOF >> $LOG_DIR/data.sh
+NOLOADINSTANCE=$NOLOADINSTANCE
+HALFLOADINSTANCE=$HALFLOADINSTANCE
+FULLLOADINSTANCE=$FULLLOADINSTANCE
+NOLOADAVG=$NOLOADAVG
+HALFLOADAVG=$HALFLOADAVG
+FULLLOADAVG=$FULLLOADAVG
+EOF
+fi
+
+# Carbon Report
+cat << EOF > $LOG_DIR/report.md
 ## Estimated System Specs
 
 CPU: $NUMCPUS x $CPUMODEL ($NUMCORESPERCPU core(s) per CPU)
@@ -299,12 +382,20 @@ Full Load: ${FULLLOAD}kgCO2eq/hr
 EOF
 
 if [ ! -z $USE_INSTANCE_TYPE ] ; then
-    cat << EOF
+    cat << EOF >> $LOG_DIR/report.md
 
 ## Estimated Carbon Consumption (From Instance Type) 
 
 No Load: ${NOLOADINSTANCE}kgCO2eq/hr
 Half Load: ${HALFLOADINSTANCE}kgCO2eq/hr
 Full Load: ${FULLLOADINSTANCE}kgCO2eq/hr
+
+## Combined Carbon Consumption Estimate (Average of Previous 2 Estimates)
+
+No Load: $(echo "print(round(($NOLOAD+$NOLOADINSTANCE)/2,4))"  |python)kgCO2eq/hr
+Half Load: $(echo "print(round(($HALFLOAD+$HALFLOADINSTANCE)/2,4))"  |python)kgCO2eq/hr
+Full Load: $(echo "print(round(($FULLLOAD+$FULLLOADINSTANCE)/2,4))"  |python)kgCO2eq/hr
 EOF
 fi
+
+cat $LOG_DIR/report.md
