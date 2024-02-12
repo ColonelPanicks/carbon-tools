@@ -55,13 +55,13 @@ if [[ $PLATFORM == "AWS"  ]] || [[ $PLATFORM == "Alces Cloud" ]] ; then
 fi
 
 ## Figure system info out
-if [ -z $GATHER ] ; then
+if [ ! -z $GATHER ] ; then
     # Grab some data from gather 
     NUMCPUS=$(flight gather show |grep -E '^[[:blank:]]+CPU' |wc -l)
     NUMCORESPERCPU=$(flight gather show |grep -m 1 -E '^[[:blank:]]+:cores:' |awk '{print $2}')
 else
     # Work it out
-    NUMCPUS=$(grep ^processor /proc/cpuinfo |wc -l)
+    NUMCPUS=$(grep "physical id"  /proc/cpuinfo | sort -u | wc -l)
     NUMCORESPERCPU=$(grep -m 1 '^cpu cores' /proc/cpuinfo |awk '{print $4}') # Assume all CPUs have same cores per CPU
 fi 
 
