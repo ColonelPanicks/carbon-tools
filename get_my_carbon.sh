@@ -32,8 +32,8 @@ fi
 # - Capacity per SSD Y
 # - Number of HDDs Y 
 # - Capacity per HDDs Y
-# - Number of PSUs
-# - Number of GPUs?
+# - Number of PSUs - Not sure how this could possibly be worked out for VMs, potentially with IPMI on hardware
+# - Number of GPUs - Not yet supported in Boavizta
 
 ## Use flight-gather info if present
 if rpm -qa |grep flight-gather -q ; then
