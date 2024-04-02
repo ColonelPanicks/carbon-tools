@@ -36,13 +36,13 @@ cat << 'EOF' > $DIR/carbon.patch
 +case "$PLATFORM" in
 +    "AWS")
 +        TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-+        CLOUDCURL="curl -H 'X-aws-ec2-metadata-token: $TOKEN'"
++        CLOUDCURL=(curl -H "X-aws-ec2-metadata-token: $TOKEN")
 +    ;;
 +    "OpenStack")
-+        CLOUDCURL="curl"
++        CLOUDCURL=(curl)
 +    ;;
 +esac
-+INSTANCE_TYPE=$($CLOUDCURL -s --fail http://169.254.169.254/latest/meta-data/instance-type)
++INSTANCE_TYPE=$("${CLOUDCURL[@]}" -s --fail http://169.254.169.254/latest/meta-data/instance-type)
  ARCHETYPES=$(curl -s -X 'GET' \
    "${BOAVIZTA_URL}/v1/cloud/instance/all_instances?provider=${CLOUD_PROVIDER}" \
    -H 'accept: application/json')
@@ -60,7 +60,7 @@ cat << 'EOF' > $DIR/carbon.patch
  case $PLATFORM in
      "AWS")
 -        country=$(curl -s -L https://github.com/PaulieScanlon/cloud-regions-country-flags/raw/main/from-provider.js |grep "'$(curl -s --fail http://169.254.169.254/latest/meta-data/placement/region)':" -A 5 |grep country |sed "s/.* = '//g;s/'.*//g")
-+        country=$(curl -s -L https://github.com/PaulieScanlon/cloud-regions-country-flags/raw/main/from-provider.js |grep "'$($CLOUDCURL -s --fail http://169.254.169.254/latest/meta-data/placement/region)':" -A 5 |grep country |sed "s/.* = '//g;s/'.*//g")
++        country=$(curl -s -L https://github.com/PaulieScanlon/cloud-regions-country-flags/raw/main/from-provider.js |grep "'$("${CLOUDCURL[@]}" -s --fail http://169.254.169.254/latest/meta-data/placement/region)':" -A 5 |grep country |sed "s/.* = '//g;s/'.*//g")
          if [[ "$country" == "England" ]] ; then
              country="United Kingdom"
          elif [[ "$country" == "South Korea" ]] ; then
