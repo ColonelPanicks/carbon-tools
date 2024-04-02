@@ -2,7 +2,7 @@
 DIR=/tmp/carbon-collection
 
 # Ensure appropriate running conditions
-REQUIRES="curl lsblk dmidecode"
+REQUIRES="curl lsblk dmidecode patch"
 for req in $REQUIRES ; do 
     if ! command -v $req >/dev/null 2>&1 ; then
         echo "Command '$req' not found, exiting..."
