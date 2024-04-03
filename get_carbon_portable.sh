@@ -2,7 +2,7 @@
 DIR=/tmp/carbon-collection
 
 # Ensure appropriate running conditions
-REQUIRES="curl lsblk dmidecode patch"
+REQUIRES="curl lsblk dmidecode"
 for req in $REQUIRES ; do 
     if ! command -v $req >/dev/null 2>&1 ; then
         echo "Command '$req' not found, exiting..."
@@ -21,52 +21,6 @@ curl -sL https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64 
 curl -sL https://repo.openflighthpc.org/test/bc > $DIR/bc
 
 chmod +x $DIR/{bc,carbon,jq}
-
-# Patch carbon
-## Use IMDSv2 for AWS (requires a token) 
-## Use lsblk to generate a list of disks excluding loop devices and ram devices
-cat << 'EOF' > $DIR/carbon.patch
---- carbon	2024-04-02 09:01:13.425795203 +0000
-+++ carbon.stufix	2024-04-02 09:01:31.949990922 +0000
-@@ -85,7 +85,16 @@
- esac
-
- ## Determine cloud instance and provider
--INSTANCE_TYPE=$(curl -s --fail http://169.254.169.254/latest/meta-data/instance-type)
-+case "$PLATFORM" in
-+    "AWS")
-+        TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
-+        CLOUDCURL=(curl -H "X-aws-ec2-metadata-token: $TOKEN")
-+    ;;
-+    "OpenStack")
-+        CLOUDCURL=(curl)
-+    ;;
-+esac
-+INSTANCE_TYPE=$("${CLOUDCURL[@]}" -s --fail http://169.254.169.254/latest/meta-data/instance-type)
- ARCHETYPES=$(curl -s -X 'GET' \
-   "${BOAVIZTA_URL}/v1/cloud/instance/all_instances?provider=${CLOUD_PROVIDER}" \
-   -H 'accept: application/json')
-@@ -104,7 +113,7 @@
- GBPERDIMM=$($GATHER_COMMAND show .ram.capacity_per_unit)
-
- # Disks
--disks=$(ls /sys/block)
-+disks=$(lsblk -e7 -l -d -o NAME -n)
- for disk in $disks ; do
- 	size=$($GATHER_COMMAND show .disks.[$disk].size)
- 	disktype=$($GATHER_COMMAND show .disks.[$disk].type)
-@@ -114,7 +123,7 @@
-
- case $PLATFORM in
-     "AWS")
--        country=$(curl -s -L https://github.com/PaulieScanlon/cloud-regions-country-flags/raw/main/from-provider.js |grep "'$(curl -s --fail http://169.254.169.254/latest/meta-data/placement/region)':" -A 5 |grep country |sed "s/.* = '//g;s/'.*//g")
-+        country=$(curl -s -L https://github.com/PaulieScanlon/cloud-regions-country-flags/raw/main/from-provider.js |grep "'$("${CLOUDCURL[@]}" -s --fail http://169.254.169.254/latest/meta-data/placement/region)':" -A 5 |grep country |sed "s/.* = '//g;s/'.*//g")
-         if [[ "$country" == "England" ]] ; then
-             country="United Kingdom"
-         elif [[ "$country" == "South Korea" ]] ; then
-EOF
-
-patch -u -i $DIR/carbon.patch $DIR/carbon
 
 # Create fake gather
 cat << 'EOF' > $DIR/gather
