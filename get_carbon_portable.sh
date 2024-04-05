@@ -20,8 +20,6 @@ curl -sL https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64 
 ## SF build of bc because nowhere offering precompiled binary like jq
 curl -sL https://repo.openflighthpc.org/test/bc > $DIR/bc
 
-chmod +x $DIR/{bc,carbon,jq}
-
 # Create fake gather
 cat << 'EOF' > $DIR/gather
 #!/bin/bash
@@ -96,14 +94,15 @@ esac
 echo "$STAT"
 EOF
 
-chmod +x $DIR/gather
+chmod +x $DIR/{bc,carbon,jq,gather}
 
 # Tweak things
 sed -i 's/^GATHER_COMMAND=.*/GATHER_COMMAND="gather"/g' $DIR/carbon
 sed -i 's,^BOAVIZTA_URL=.*,BOAVIZTA_URL="http://api.boavizta.openflighthpc.org",g' $DIR/carbon
+sed -i 's,^LEADERBOARD_URL=.*,LEADERBOARD_URL="http://api.boavizta.openflighthpc.org:3000",g' $DIR/carbon
 
 # Run report
-carbon report
+carbon send
 
 # Tidy things 
 rm -rf $DIR
