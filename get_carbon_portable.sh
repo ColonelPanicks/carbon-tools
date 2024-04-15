@@ -36,7 +36,7 @@ fi
 # Get correct data wanted by call
 case "$VAL" in
     ".platform")
-        plat_query="$(dmidecode -t system |grep -E '^[[:blank:]]+Manufacturer' |awk '{print $2}')"
+        plat_query="$(cat /sys/devices/virtual/dmi/id/sys_vendor |awk '{print $1}')"
         case $plat_query in
             "OpenStack")
                 PLATFORM="$plat_query"
@@ -54,19 +54,21 @@ case "$VAL" in
         STAT="$PLATFORM"
     ;;
     ".cpus.units")
-        STAT="$(dmidecode -q -t processor |grep '^Processor Information'  |wc -l)"
+        STAT="$(grep '^physical id' /proc/cpuinfo |sort |uniq |wc -l)"
     ;;
     ".cpus.cores_per_cpu")
-        STAT="$(dmidecode -q -t processor |grep 'Thread Count'  -m 1 |sed 's/.*: //g')"
+        STAT="$(grep -m 1 '^cpu cores' /proc/cpuinfo |sed 's/.*: //g')"
     ;;
     '.cpus.cpu_data.[CPU0].model')
         STAT="$(grep -m 1 '^model name' /proc/cpuinfo |sed 's/.*: //g;s/ @.*//g')"
     ;;
     ".ram.units")
-        STAT="$(dmidecode -q -t 17 |grep '^Memory Device' | wc -l)"
+        STAT="$((grep dimm <(ls /sys/devices/system/edac/mc/mc*/ 2> /dev/null ) || echo 'virtual') |wc -l)"
+        # This might not be useful at all on systems without ECC memory
     ;;
     ".ram.capacity_per_unit")
-        STAT="$(dmidecode -t memory |grep -m 1 -E '^[[:blank:]]+Size' |awk '{print $2}')"
+        slots="$((grep dimm <(ls /sys/devices/system/edac/mc/mc*/ 2> /dev/null ) || echo 'virtual') |wc -l)"
+        STAT="$(($(lshw -quiet -c memory 2>/dev/null |grep size |grep -o '[[:digit:]]*') / $slots))"
     ;;
     ".disks."*".size")
         disk="$(echo "$VAL" |sed 's/.*disks\.\[//g;s/\]\.size.*//g')"
@@ -97,9 +99,10 @@ EOF
 chmod +x $DIR/{bc,carbon,jq,gather}
 
 # Tweak things
+sed -i "s,LOG_DIR=.*,LOG_DIR='$DIR/log/',g" $DIR/carbon
 sed -i 's/^GATHER_COMMAND=.*/GATHER_COMMAND="gather"/g' $DIR/carbon
 sed -i 's,^BOAVIZTA_URL=.*,BOAVIZTA_URL="http://api.boavizta.openflighthpc.org",g' $DIR/carbon
-sed -i 's,^LEADERBOARD_URL=.*,LEADERBOARD_URL="http://api.boavizta.openflighthpc.org:3000",g' $DIR/carbon
+sed -i 's,^LEADERBOARD_URL=.*,LEADERBOARD_URL="http://leaderboard.openflighthpc.org",g' $DIR/carbon
 
 # Run report
 carbon send
